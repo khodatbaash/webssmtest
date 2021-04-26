@@ -3,34 +3,68 @@
  * Date: 15-03-2021
  * change url (line 7) to set it to your python server address (leave it as it is if you're running backend on your own computer)
  */
-const url = "http://127.0.0.1:5000/surfacereconstructor"
+
 
 import vtkSTLReader from 'vtk.js/Sources/IO/Geometry/STLReader';
 import vtkSTLWriter from 'vtk.js/Sources/IO/Geometry/STLWriter';
-
-//1- generate instance matrix point cloud
 import {create, all} from 'mathjs'
+import vtkPoints from 'vtk.js/Sources/Common/Core/Points'
+import vtkCellArray from 'vtk.js/Sources/Common/Core/CellArray'
+import vtkPolyData from 'vtk.js/Sources/Common/DataModel/PolyData'
+import vtkActor from 'vtk.js/Sources/Rendering/Core/Actor';
+import vtkMapper from 'vtk.js/Sources/Rendering/Core/Mapper';
+import vtkRenderWindow from 'vtk.js/Sources/Rendering/Core/RenderWindow';
+import vtkRenderer from 'vtk.js/Sources/Rendering/Core/Renderer';
+import vtkConeSource from 'vtk.js/Sources/Filters/Sources/ConeSource';
+import vtkOpenGLRenderWindow from 'vtk.js/Sources/Rendering/OpenGL/RenderWindow';
+import vtkRenderWindowInteractor from 'vtk.js/Sources/Rendering/Core/RenderWindowInteractor';
+import vtkInteractorStyleTrackballCamera from 'vtk.js/Sources/Interaction/Style/InteractorStyleTrackballCamera';
+
+
+//0-reading data
+
+$.when($.ajax({
+    url: "http://127.0.0.1:5000/readdata",//"../data/stddev.csv",//
+    async: false,
+    success: function (csvdjsn) {
+        const csvd = JSON.parse(csvdjsn)
+        window['stddev1'] = $.csv.toArrays(csvd["stddev"]);
+
+        window['basisMatrix1'] = $.csv.toArrays(csvd["basisMatrix"]);
+
+        window['meanVector1'] = $.csv.toArrays(csvd["meanVector"]);
+
+        window['meanShape1'] = $.csv.toArrays(csvd["meanShape"]);
+    },
+    dataType: "text",
+    complete: function () {
+    }
+})).then(function(){
+
+const url = "http://127.0.0.1:5000/surfacereconstructor" //"http://ankleshapemodels.com/api"
+//1- generate instance matrix point cloud
+
 const math = create(all)
-window.alpha1 = Array(1).fill().map(() => Array(window.basisMatrix1[0].length))
-for (let i=0; i<window.basisMatrix1[0].length; i++){
-    window.alpha1[0][i]=0
+
+window["alpha1"] = Array(1).fill().map(() => Array(window['basisMatrix1'][0].length));
+for (let i=0; i<window['basisMatrix1'][0].length; i++){
+    window['alpha1'][0][i]=0
 }
+
 
 //create instance of the shape from the shape model parameters
 function calculateInstanceMatrix(alpha, stddev, basisMatrix, meanVector, meanShape){
     var alpha_mul_stddev2 = math.dotMultiply(alpha, stddev); //1*16
-    var basis_transposed2 = math.transpose(basisMatrix); //16*window.basisMatrix1.length
+    var basis_transposed2 = math.transpose(basisMatrix); //16*window['basisMatrix1'].length
     var alstd_mul_bastran2 = math.multiply(alpha_mul_stddev2, basis_transposed2);
     var alstd_mulbastran_add_meaVec2 = math.add(alstd_mul_bastran2,meanVector)
     var instance2 = math.add(alstd_mulbastran_add_meaVec2, math.reshape(meanShape, [1,basisMatrix.length]))
     return instance2;
 }
-var instancePoints2 = math.reshape(calculateInstanceMatrix(window.alpha1, window.stddev1, window.basisMatrix1, window.meanVector1, window.meanShape1), [window.basisMatrix1.length/3, 3])
+var instancePoints2 = math.reshape(calculateInstanceMatrix(window['alpha1'], window['stddev1'], window['basisMatrix1'], window['meanVector1'], window['meanShape1']), [window['basisMatrix1'].length/3, 3])
 
 //2-turn instance matrix to a vtk point cloud
-import vtkPoints from 'vtk.js/Sources/Common/Core/Points'
-import vtkCellArray from 'vtk.js/Sources/Common/Core/CellArray'
-import vtkPolyData from 'vtk.js/Sources/Common/DataModel/PolyData'
+
 window["writer1"] = vtkSTLWriter.newInstance()
 window["blob1"] = 0
 window["fileContents1"] = 0
@@ -104,18 +138,11 @@ function assembleSurface(bufPoints, bufCells, bufNormals){
 }
 var polyData = instanceMatrix2vtkPolydata(instancePoints2, 1)
 window["polyDataTemp1"] = polyData
-var sm_max_num = window.basisMatrix1[0].length
+var sm_max_num = window['basisMatrix1'][0].length
 
 //3-visualize point cloud
 //import 'vtk.js/Sources/favicon';
-import vtkActor from 'vtk.js/Sources/Rendering/Core/Actor';
-import vtkMapper from 'vtk.js/Sources/Rendering/Core/Mapper';
-import vtkRenderWindow from 'vtk.js/Sources/Rendering/Core/RenderWindow';
-import vtkRenderer from 'vtk.js/Sources/Rendering/Core/Renderer';
-import vtkConeSource from 'vtk.js/Sources/Filters/Sources/ConeSource';
-import vtkOpenGLRenderWindow from 'vtk.js/Sources/Rendering/OpenGL/RenderWindow';
-import vtkRenderWindowInteractor from 'vtk.js/Sources/Rendering/Core/RenderWindowInteractor';
-import vtkInteractorStyleTrackballCamera from 'vtk.js/Sources/Interaction/Style/InteractorStyleTrackballCamera';
+
 var instancePointsTemp;
 function setupController(containerId){
     const controller = document.getElementsByClassName("controller"+containerId)[0]
@@ -353,13 +380,12 @@ function sendPointCloud(pointArray, cntnr_nr){
 }
 const reader = vtkSTLReader.newInstance();
 prepareScene()
-console.log("preparescene is done")
 setupController(1)
-console.log("setupcontroller is done")
 visualise(polyData)
-console.log("visualizepolydata is done")
 
 //4-interactive working with shape modes
 function refreshVisualization(polyDataTemp1){
     visualise(polyDataTemp1);
 }
+
+});
